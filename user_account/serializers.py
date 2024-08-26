@@ -31,19 +31,16 @@ class RegisterSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField()
-    
+
     def validate(self, data):
-        user = User.objects.filter(username=data['username']).first()
-        if not user:
-            raise serializers.ValidationError("Account not registered")
-        if not user.check_password(data['password']):
-            raise serializers.ValidationError("Invalid credentials")
+        user = authenticate(username=data['username'], password=data['password'])
+        if user is None:
+            raise serializers.ValidationError("Invalid credentials or account does not exist.")
         data['user'] = user
         return data
-    
+
     def get_jwt_token(self, data):
         user = data['user']
-        
         refresh = RefreshToken.for_user(user)
         
         return {
@@ -54,6 +51,7 @@ class LoginSerializer(serializers.Serializer):
                 'username': user.username
             }
         }
+
         
         
 

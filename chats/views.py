@@ -1,16 +1,19 @@
 from rest_framework import generics, permissions,status
 from .models import Chat, FileUpload
 from .serializers import ChatSerializer, FileUploadSerializer
-from .generate_image import get_audio_input,generate_image
+from .generate_image import generate_image
+from .imp import get_audio_input,mapintent,detect_intent
 from rest_framework.response import Response
 from .scrap import handle_user_input, invoke_supreme_llm, google_search, scrape_html, save_text_as_txt, merge_text_files_to_pdf, get_pdf_text, get_text_chunks, create_vector_store, get_supreme_model_response
 import os
 from dotenv import load_dotenv
 import re
-from .olama import capture_image, generate_response_from_image
+from .olama import generate_response_from_image,capture_image
+import base64,io
+from PIL import Image
+from django.conf import settings
 
 load_dotenv()
-
 
 class ChatListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatSerializer
@@ -19,26 +22,42 @@ class ChatListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Chat.objects.filter(user=self.request.user)
 
-    def perform_create(self, serializer):
-        # Capture and convert audio input
-        user_message = get_audio_input()
-        if user_message:
-            # Save the chat with the converted text
-            chat = serializer.save(
-                user=self.request.user,
-                message=user_message  # Store the converted text
+    def post(self, request, *args, **kwargs):
+        u_input = request.data.get('transcript')
+        if u_input is None:
+            return Response({"error": "Transcript data is missing or invalid."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            intent = detect_intent(u_input)
+            image_filename = mapintent(intent.content, u_input)
+            
+            # Create the chat object first
+            chat = Chat.objects.create(
+                user=request.user,
+                message=u_input,
             )
-            # Generate an image or any other response if needed
-            image_path = generate_image(user_message)  # Assuming you have a generate_image function
-            if image_path:
+            
+            # Initialize image_path
+            image_path = None
+            
+            if image_filename:
+                # Store only the filename in the database
                 FileUpload.objects.create(
                     chat=chat,
-                    file=image_path,
+                    file=image_filename,  # Store only the filename
                     file_type='image'
                 )
-            return chat
-        else:
-            return None
+                # Construct the full URL for the response
+                image_path = f"{settings.MEDIA_URL}{image_filename}"
+
+            serializer = self.get_serializer(chat)
+            return Response({"chat": serializer.data, "image_path": image_path}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"Error in post method: {e}")
+            return Response({"error": "An error occurred while processing the request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 
 class FileUploadViewSet(generics.ListCreateAPIView):
     queryset = FileUpload.objects.all()
@@ -130,45 +149,56 @@ class ChatbotView(generics.GenericAPIView):
                 return Response({"error": "Audio input could not be processed."}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def capture_image(image_data):
+    try:
+        # Decode base64 image data
+        image_data = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(image_data))
+        return image
+    except Exception as e:
+        raise Exception(f"Failed to decode image data: {e}")
+    
+    
+
 class CaptureImageView(generics.GenericAPIView):
     serializer_class = ChatSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        # Capture the image
-        image = capture_image()
+        image_data = request.data.get('image_data')
+        question = request.data.get('question')
+        
+        print(question)
 
-        # Get the question from the request data
-        question = get_audio_input()
+        if not image_data or not question:
+            return Response({"error": "Image or question not provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if image and question:
-            # Generate a response based on the image and question
-            response = generate_response_from_image(image, question)
+        try:
+            image = capture_image(image_data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create the chat object
-            chat = Chat.objects.create(
-                user=request.user,
-                message=question,
-                response=response
-            )
+        # Proceed with image processing and response generation
+        response = generate_response_from_image(image, question)
 
-            # Define the correct image path
-            image_filename = f"user_{request.user.id}_captured_image.jpg"
-            image_path = os.path.join('uploads', image_filename)
+        # Create the chat object
+        chat = Chat.objects.create(
+            user=request.user,
+            message=question,
+            response=response
+        )
 
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        image_path = os.path.join('media', 'captured_image.jpg')
+        image.save(image_path)
 
-            # Save the image to the correct path
-            image.save(image_path)
+        # Save the image to the correct path
+        image.save(image_path)
 
-            # Create a FileUpload object
-            FileUpload.objects.create(
-                chat=chat,
-                file=image_filename,
-                file_type='image'
-            )
+        # Create a FileUpload object
+        FileUpload.objects.create(
+            chat=chat,
+            file=image_path,
+            file_type='image'
+        )
 
-            return Response({"response": response}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Failed to capture image or question not provided."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"response": response, "image_path": image_path}, status=status.HTTP_200_OK)

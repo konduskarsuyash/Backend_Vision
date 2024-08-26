@@ -34,12 +34,15 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes=[AllowAny]
+    
     def post(self, request):
         try:
             data = request.data 
+            print("Received data:", data)  # Log received data
             serializer = LoginSerializer(data=data)
             
             if not serializer.is_valid():
+                print("Serializer errors:", serializer.errors)  # Log serializer errors
                 return Response({'data': serializer.errors, 'message': "Invalid data"}, status=status.HTTP_400_BAD_REQUEST)   
             
             token_data = serializer.get_jwt_token(serializer.validated_data)
@@ -51,6 +54,7 @@ class LoginView(APIView):
         except Exception as e:
             print("Exception:", e)
             return Response({'data': {}, 'message': "Something went wrong"}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 

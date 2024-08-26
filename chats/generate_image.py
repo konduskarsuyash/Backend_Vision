@@ -9,8 +9,10 @@ from gradio_client import Client
 from langchain import PromptTemplate
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
-
+from backend.settings import BASE_DIR
+from django.conf import settings
 load_dotenv()
+
 
 # Initialize Gradio and LangChain clients
 client = Client("stabilityai/stable-diffusion-3-medium")
@@ -30,34 +32,7 @@ Based on the message provided, return the corresponding number I dont need anyth
 Message: {message}
 """
 
-# Create the PromptTemplate object
-prompt_template = PromptTemplate(
-    input_variables=["message"],
-    template=template,
-)
-
-def get_audio_input():
-    # recognizer = sr.Recognizer()
-    # with sr.Microphone() as source:
-    #     print("Please say something...")
-    #     audio = recognizer.listen(source)
-
-    #     try:
-    #         user_input = recognizer.recognize_google(audio)
-    #         print(f"You said: {user_input}")
-    #         return user_input
-    #     except sr.UnknownValueError:
-    #         print("Sorry, I could not understand the audio.")
-    #         return None
-    #     except sr.RequestError as e:
-    #         print(f"Could not request results from Google Web Speech API; {e}")
-    #         return None
-    return "can you tell me what time it is showing in the screen"
-def detect_intent(user_message):
-    prompt = prompt_template.format(message=user_message)
-    response = llm.invoke(prompt)
-    return response
-
+# Create the PromptTemplate objec
 def generate_image(query):
     try:
         result = client.predict(
@@ -72,12 +47,13 @@ def generate_image(query):
             api_name="/infer"
         )
         temp_image_path = result[0]
-        desired_directory = "results"
-        new_image_path = os.path.join(desired_directory, "generated_image.png")
-        os.makedirs(desired_directory, exist_ok=True)
-        shutil.copy(temp_image_path, new_image_path)
-        print(f"Image saved to {new_image_path}")
-        return new_image_path
+        media_filename = 'generated_image.png'
+        media_path = os.path.join(settings.MEDIA_ROOT, media_filename)
+        os.makedirs(os.path.dirname(media_path), exist_ok=True)
+        shutil.copy(temp_image_path, media_path)
+        print(f"Image saved to {media_path}")
+        return media_filename  # Return filename only
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
+
