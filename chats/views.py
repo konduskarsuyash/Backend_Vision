@@ -4,12 +4,15 @@ from .serializers import ChatSerializer, FileUploadSerializer
 from .generate_image import generate_image
 from .imp import get_audio_input,mapintent,detect_intent
 from rest_framework.response import Response
-from .scrap import handle_user_input, invoke_supreme_llm, google_search, scrape_html, save_text_as_txt, merge_text_files_to_pdf, get_pdf_text, get_text_chunks, create_vector_store, get_supreme_model_response
+# from .scrap import handle_user_input, invoke_supreme_llm, google_search, scrape_html, save_text_as_txt, merge_text_files_to_pdf, get_pdf_text, get_text_chunks, create_vector_store, get_supreme_model_response
 import os
 from dotenv import load_dotenv
+from langchain.memory import ConversationBufferMemory
 import re
 from .olama import generate_response_from_image,capture_image
 import base64,io
+from .tp import handle_user_input, invoke_supreme_llm, google_search, extract_main_content, get_text_chunks, create_embeddings, get_supreme_model_response
+
 from PIL import Image
 from django.conf import settings
 
@@ -67,86 +70,27 @@ class FileUploadViewSet(generics.ListCreateAPIView):
 
 
 class ChatbotView(generics.GenericAPIView):
-        serializer_class = ChatSerializer
+    serializer_class = ChatSerializer
 
-        def get_queryset(self):
-            return Chat.objects.filter(user=self.request.user)
+    def post(self, request, *args, **kwargs):
+        user_input = "Today's stock price of Amazon"  # Placeholder for actual user input
 
-        def post(self, request, *args, **kwargs):
-            user_input = get_audio_input()  # Capture the audio input and convert it to text
+        # Detect the intent from the user input
+        intent = detect_intent(user_input)
 
-            if user_input:
-                # Save the chat with the converted text
-                chat = Chat.objects.create(
-                    user=self.request.user,
-                    message=user_input  # Store the converted text
-                )
+        # Determine which function to run based on the detected intent
+        action_result = mapintent(intent.content, user_input)
 
-                # Process the input through J.A.R.V.I.S.
-                response = handle_user_input(user_input)
-                
+        if intent == '2':  # Image generation
+            return Response({"image_filename": action_result}, status=status.HTTP_200_OK)
+        elif intent == '4':  # Real-time web search
+            return Response({"response": action_result}, status=status.HTTP_200_OK)
 
-                if "GOOOOOGLEIIIIT" in response:
-                    # Extract the search suggestion
-                    search_suggestion = re.search(r'GOOOOOGLEIIIIT\s*([^\.]+)', response)
-                    if search_suggestion:
-                        supreme_query = search_suggestion.group(1).strip()
+        # Handle other intents similarly
+        # elif intent == 'X':
+        #     return Response({"result": action_result}, status=status.HTTP_200_OK)
 
-                        # Call the supreme model to refine the query
-                        google_query = invoke_supreme_llm(supreme_query)
-                        print("****google query***",google_query)
-
-                        # Perform Google search using the refined query
-                        api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
-                        cx = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID")
-                        urls = google_search(google_query, api_key, cx)
-                        
-                        if not urls:
-                            return Response({"response": "Google Search did not return any relevant results."}, status=status.HTTP_200_OK)
-
-
-                        if urls:
-                            contents = []
-                            for url in urls:
-                                content = scrape_html(url)
-                                print(f"Content from {url}: {content[:500]}...")  # Log the first 500 characters
-
-                                if content:
-                                    contents.append(content)
-
-                            # Save scraped content as text files
-                            text_filenames = []
-                            for i, content in enumerate(contents):
-                                filename = f"scraped_text_{i+1}.txt"
-                                save_text_as_txt(content, filename)
-                                text_filenames.append(filename)
-
-                            # Merge text files into a PDF
-                            merge_text_files_to_pdf(text_filenames, "combined_content.pdf")
-
-                            # Extract text from the combined PDF
-                            pdf_text = get_pdf_text(["combined_content.pdf"])
-
-                            if pdf_text:
-                                # Break down the PDF text into chunks and store in vector embeddings
-                                text_chunks = get_text_chunks(pdf_text)
-                                create_vector_store(text_chunks)
-
-                            # Call the supreme model again to generate the final response
-                            supreme_response = get_supreme_model_response(user_input)
-                            response = supreme_response
-                        else:
-                            response = "Could not retrieve useful information from Google Search."
-
-                # Update the chat instance with the response
-                    print("Final Response:", response)
-                    chat.response = response
-                    chat.save()
-
-
-                return Response({"response": response}, status=status.HTTP_200_OK)
-            else:
-                return Response({"error": "Audio input could not be processed."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Audio input could not be processed."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 def capture_image(image_data):

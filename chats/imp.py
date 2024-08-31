@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from .olama import generate_response_from_image
 from .generate_image import generate_image
 # from rag import check_file_type , generate_image_response
+from .tp import handle_user_input
+from .web_search import perform_web_search
 load_dotenv()
 
 groq_api_key = os.getenv('GROQ_API_KEY')
@@ -55,8 +57,10 @@ def mapintent(intent,query):
 #             print(f"{filename}: {file_type}")
 #             if file_type=="Image":
 #                 print(generate_image_response(file_path,query))
-#     elif intent == '4':
-#         return 'Real-time Web Search'
+    elif intent == '4':
+        print('Performing real-time web search')
+        web_search_result = perform_web_search(query)
+        return web_search_result
 #     elif intent=='5':
 #         return 'Chat-bot'
 #     elif intent=='6':
