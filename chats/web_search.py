@@ -1,15 +1,19 @@
-from .tp import invoke_supreme_llm,google_search,extract_main_content,get_text_chunks,create_embeddings,get_supreme_model_response
 import os
+from .tp import invoke_supreme_llm, google_search, extract_main_content, get_text_chunks, create_embeddings, get_supreme_model_response
 
 def perform_web_search(query):
+    print(query)
     try:
         # Generate a Google search query using the supreme LLM
         google_query = invoke_supreme_llm(query)
+        print("Generated Google search query:", google_query)
         api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         cx = os.getenv("GOOGLE_CUSTOM_SEARCH_ENGINE_ID")
 
         # Perform the Google search and get URLs
         urls = google_search(google_query, api_key, cx)
+        print(f"API Key: {api_key}, CX: {cx}")
+        print("URLs found:", urls)
 
         if urls:
             all_text_chunks = []

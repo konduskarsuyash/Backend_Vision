@@ -13,6 +13,7 @@ from .olama import generate_response_from_image,capture_image
 import base64,io
 from .tp import handle_user_input, invoke_supreme_llm, google_search, extract_main_content, get_text_chunks, create_embeddings, get_supreme_model_response
 
+from .web_search import perform_web_search
 from PIL import Image
 from django.conf import settings
 
@@ -73,25 +74,32 @@ class ChatbotView(generics.GenericAPIView):
     serializer_class = ChatSerializer
 
     def post(self, request, *args, **kwargs):
-        user_input = "Today's stock price of Amazon"  # Placeholder for actual user input
+        user_input = request.data.get('message')
 
         # Detect the intent from the user input
         intent = detect_intent(user_input)
+        if intent:
+            print(f"Intent detected: {intent.content}")
+        else:
+            print("Intent detection failed.")
+            return Response({"error": "Could not detect intent."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        print(f"Detected intent: {intent.content}")
 
         # Determine which function to run based on the detected intent
         action_result = mapintent(intent.content, user_input)
 
-        if intent == '2':  # Image generation
+        if intent.content == '2':  # Image generation
             return Response({"image_filename": action_result}, status=status.HTTP_200_OK)
-        elif intent == '4':  # Real-time web search
-            return Response({"response": action_result}, status=status.HTTP_200_OK)
+        elif intent.content == '4':  # Real-time web search
+            search_result = perform_web_search(user_input)
+            return Response({"response": search_result}, status=status.HTTP_200_OK)
 
         # Handle other intents similarly
-        # elif intent == 'X':
+        # elif intent.content == 'X':
         #     return Response({"result": action_result}, status=status.HTTP_200_OK)
 
-        return Response({"error": "Audio input could not be processed."}, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response({"error": "Could not process the request."}, status=status.HTTP_400_BAD_REQUEST)
 
 def capture_image(image_data):
     try:
