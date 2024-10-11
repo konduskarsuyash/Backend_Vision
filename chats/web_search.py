@@ -1,5 +1,8 @@
 import os
 from .tp import invoke_supreme_llm, google_search, extract_main_content, get_text_chunks, create_embeddings, get_supreme_model_response
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def perform_web_search(query):
     print(query)

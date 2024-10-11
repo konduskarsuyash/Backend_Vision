@@ -12,6 +12,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 from langchain_groq import ChatGroq
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from urllib.parse import quote_plus
 
 # Load environment variables
 load_dotenv()
@@ -49,8 +50,11 @@ def invoke_supreme_llm(query):
     print(google_response)
     return google_response
 
+
 def google_search(query, api_key, cx):
+    query = quote_plus(query)  # Make sure the query is URL-encoded properly
     search_url = f"https://www.googleapis.com/customsearch/v1?q={query}&num=5&key={api_key}&cx={cx}"
+    print(f"Search URL: {search_url}")  # Check the generated URL
     try:
         response = requests.get(search_url)
         response.raise_for_status()
@@ -63,6 +67,7 @@ def google_search(query, api_key, cx):
     except Exception as e:
         print(f"Error occurred: {e}")
     return []
+
 
 def extract_main_content(url):
     try:

@@ -13,3 +13,7 @@ class ChatSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chat
         fields = ['id', 'user', 'message', 'response', 'started_at','updated_at', 'files']
+
+
+class IntentSerializer(serializers.Serializer):
+    message = serializers.CharField()
