@@ -25,3 +25,16 @@ class FileUpload(models.Model):
 
     def __str__(self):
         return f"{self.get_file_type_display()} {self.file.name} for Chat {self.chat.id}"
+    
+    
+class PDFDocument(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    pdf_file = models.FileField(upload_to='pdfs/')
+    question = models.TextField()
+    response = models.TextField(null=True, blank=True)  # New field to store the response
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self) -> str:
+        return f"Pdf uploaded by{self.user.username} and question is {self.question}"
+    

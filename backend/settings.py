@@ -174,6 +174,8 @@ CORS_ALLOW_CREDENTIALS = True
 # settings.py
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# Add 'data' directory where PDFs will be moved
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 
 REST_USE_JWT = True 

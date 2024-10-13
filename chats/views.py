@@ -1,6 +1,6 @@
 from rest_framework import generics, permissions,status
-from .models import Chat, FileUpload
-from .serializers import ChatSerializer, FileUploadSerializer,IntentSerializer
+from .models import Chat, FileUpload,PDFDocument
+from .serializers import ChatSerializer, FileUploadSerializer,IntentSerializer,PDFDocumentSerializer
 from .generate_image import generate_image
 from .imp import get_audio_input,mapintent,detect_intent
 from rest_framework.response import Response
@@ -18,6 +18,8 @@ from .web_search import perform_web_search
 from PIL import Image
 from django.conf import settings
 from backend.settings import BASE_DIR
+from .llama_index_rag import handle_pdf_and_question
+
 load_dotenv()
 
 
@@ -233,27 +235,74 @@ class IntentDetectionView(generics.GenericAPIView):
     serializer_class = IntentSerializer
 
     def post(self, request, *args, **kwargs):
-        # Retrieve the user message from the request
-        user_message = request.data.get('message')
+        print("Received data:", request.data)  # Add this line
+
+        user_message = request.data.get('message')  
+        print(f"Received message: {user_message}")  # Debug print
 
         if not user_message:
+            print("No message provided")  # Debug print
             return Response({"error": "Message not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Detect intent from the user input
         intent = detect_intent(user_message)
+        print(f"Detected intent: {intent}")  # Debug print
+
         if not intent:
+            print("Could not detect intent")  # Debug print
             return Response({"error": "Could not detect intent."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Attempt to extract and validate the intent number
         try:
-            intent_value = intent.content.strip()  
-            intent_number = int(intent_value)  
-            print(intent_number)
+            intent_value = intent.content.strip()
+            intent_number = int(intent_value)
+            print(f"Parsed intent number: {intent_number}")  # Debug print
         except (ValueError, AttributeError) as e:
-            # If there's an error in conversion or accessing intent.content, log and respond with error
-            print(f"Error parsing intent: {e}")
-            return Response({"error": "Invalid intent format."}, status=status.HTTP_400_BAD_REQUEST)
+            print(f"Error parsing intent: {e}")  # Debug print
+            return Response({"error": f"Invalid intent format: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Log and return the detected intent number
-        print(f"Detected intent number: {intent_number}")
+        print(f"Returning intent number: {intent_number}")  # Debug print
         return Response({"intent_number": intent_number}, status=status.HTTP_200_OK)
+
+
+
+class UploadPDFView(generics.GenericAPIView):
+    serializer_class = PDFDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        
+        if serializer.is_valid():
+            # Save the PDF document instance
+            pdf_document = serializer.save(user=request.user, response='')
+
+            try:
+                # Check if there's a question provided
+                question = request.data.get('question', None)
+                if question:
+                    # Remove the intent detection here, as it's already been done
+                    # Move the uploaded file to the data directory
+                    pdf_file_path = pdf_document.pdf_file.path
+                    data_directory = os.path.join(settings.BASE_DIR, 'data')
+                    os.makedirs(data_directory, exist_ok=True)
+                    new_pdf_path = os.path.join(data_directory, os.path.basename(pdf_file_path))
+
+                    os.rename(pdf_file_path, new_pdf_path)  # Move the PDF to 'data' directory
+
+                    # Call the processing function from llama_index_rag.py
+                    response_data = handle_pdf_and_question(new_pdf_path, question)
+
+                    # Store the response in the PDFDocument instance
+                    pdf_document.response = response_data
+                    pdf_document.save()  # Save the instance with the response
+
+                    # Return the extracted content as a JSON response
+                    return Response({"content": response_data}, status=status.HTTP_200_OK)
+                else:
+                    return Response({"error": "No question provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    

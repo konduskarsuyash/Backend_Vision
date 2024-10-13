@@ -9,6 +9,7 @@ from .generate_image import generate_image
 # from rag import check_file_type , generate_image_response
 from .tp import handle_user_input
 from .web_search import perform_web_search
+
 load_dotenv()
 
 groq_api_key = os.getenv('GROQ_API_KEY')
@@ -46,8 +47,9 @@ def mapintent(intent,query):
         print('calling generation of image')
         image_filename = generate_image(query) 
         return image_filename
-#     elif intent == '3':
-#         uploads_dir = "uploads"
+    elif intent == '3':
+        print('calling pdf part')
+        uploads_dir = "uploads"
 
 # # Iterate over all files in the directory
 #         for filename in os.listdir(uploads_dir):
